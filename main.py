@@ -3,7 +3,8 @@ import threading
 from os import cpu_count
 import time
 import json
-from tqdm import tqdm, trange
+from json import JSONEncoder
+
 
 words = []
 patterns = []
@@ -32,6 +33,9 @@ class Combination:
     def printCombi(self):
         return f"Word 1: {self.word1}\t Word 2: {self.word2}\t Pattern: {self.pattern.printPattern()}"
 
+    def jsonify(self):
+        return f'{{"Word1" : {self.word1}, "Word2" : {self.word2}, "Pattern": {{"Fixed" : {self.pattern.fixed: 05b}, "Existing" : {self.pattern.existing:05b}, "Non_Existing" : {self.pattern.non_existing:05b}}}}}'
+
 def readCSV():
     csvfile = open('wordle.csv')
     wordleReader = csv.reader(csvfile)
@@ -44,22 +48,23 @@ def generatePatterns():
         for existing in range(0b100000):
             for fixed in range(0b11111):
                 if non_existing + existing + fixed == 0b11111:
-                    patterns.append(Pattern(format(fixed, "05b"), format(existing, "05b"), format(non_existing, "05b")))
+                    patterns.append(Pattern(fixed, existing, non_existing))
 
 
 def combinationPossible(word1, word2, pattern):
-    for i in range(0, 5):
-        if pattern.fixed[i] == '1' and word1[i] != word2[i]:
+    for i in range(5):
+        letter_is_equal = word1[i] == word2[i]
+        if (pattern.fixed >> (4-i)) & 1 and not letter_is_equal:
             return 0
 
-    for i in range(0, 5):
+        letter_in_word = word1[i] in word2
+        if (pattern.existing >> (4-i)) & 1 and letter_in_word:
+            return 0
+
         # Maybe sonderregelung bei 2x gleichem Buchstaben
-        if pattern.existing[i] == '1' and (not word1[i] in word2 or word1[i] == word2[i]):
+        if (pattern.existing >> (4-i)) & 1 and (not letter_in_word or letter_is_equal):
             return 0
 
-    for i in range(0, 5):
-        if pattern.non_existing[i] == '1' and word1[i] in word2:
-            return 0
     return 1
 
 
@@ -83,11 +88,11 @@ def generateCombinations(start, stop):
 def updateProgressBar():
     global progress
     old_progress = -1
-    max_iter = len(words)
+    max_iter = 8#len(words)
 
     while progress < max_iter:
         if old_progress != progress:
-            print(f"\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b{progress}/{max_iter}  {last_word}", end="")
+            print('\b'*100 + f"{progress}/{max_iter}  {last_word}", end="")
             old_progress = progress
 
 
@@ -108,8 +113,8 @@ if __name__ == '__main__':
     progress_thread.start()
 
     for i in range(cpu_count()):
-        start = i*words_per_thread
-        end = (i+1)*words_per_thread
+        start = 0#i*words_per_thread
+        end = 1#(i+1)*words_per_thread
 
         if i == cpu_count()-1 and carry:
             end += carry
@@ -124,6 +129,10 @@ if __name__ == '__main__':
 
     progress_thread.join()
     with open('combs.json', 'w') as f:
-        json.dump(combinations, f)
+        f.write("[")
+        for comb in combinations:
+            f.write(comb.jsonify())
+            f.write(",\n")
+        f.write("]")
 
-    print("Took --- %s seconds" % (time.time()-start_time))
+    print("\nTook --- %s seconds" % (time.time()-start_time))
