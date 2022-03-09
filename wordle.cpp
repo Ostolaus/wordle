@@ -23,8 +23,19 @@ Pattern* patterns;
 size_t patternCount = 0;
 
 size_t words_done = 0;
-char last_word[5] = {'H', 'A', 'L', 'L', 'O'};
+char last_word[5];
 pthread_mutex_t progress_lock;
+
+Combination* results;
+size_t result_count = 0;
+pthread_mutex_t result_lock;
+
+
+typedef struct workingParameters{
+    size_t tid;
+    size_t start;
+    size_t end;
+}workingParameters;
 
 void readCSV() {
     wordlist = (char**) malloc((wordCount+1)*sizeof(char *));
