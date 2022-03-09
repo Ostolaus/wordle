@@ -1,3 +1,4 @@
+#include <string.h>
 #include <string>
 #include <stdint.h>
 
@@ -8,8 +9,7 @@ public:
     size_t non_existing = 0;
 
     Pattern(size_t fix, size_t exi, size_t non_exi): fixed(fix), existing(exi), non_existing(non_exi){}
-private:
-    std::string printPattern();
+    std::string JSONify();
 };
 
 class Combination{
@@ -18,6 +18,9 @@ public:
     char word2[5];
     Pattern pattern;
 
-    Combination(char* w1, char* w2, Pattern pat);
+    Combination(char* w1, char* w2, Pattern pat): pattern(pat){
+        memcpy(word1, w1, 5);
+        memcpy(word2, w2, 5);
+    };
     std::string JSONify();
 };
