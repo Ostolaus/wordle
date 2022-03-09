@@ -1,9 +1,10 @@
 #include "classes.hpp"
 #include <iostream>
 #include <vector>
-#include <thread>
+#include <pthread.h>
 #include <string.h>
 #include <assert.h>
+#include <unistd.h>
 
 #include <fstream>
 
@@ -19,6 +20,9 @@ size_t wordCount = 0;
 Pattern* patterns;
 size_t patternCount = 0;
 
+size_t words_done = 0;
+char last_word[5] = {'H', 'A', 'L', 'L', 'O'};
+pthread_mutex_t progress_lock;
 
 void readCSV() {
     wordlist = (char**) malloc((wordCount+1)*sizeof(char *));
@@ -92,23 +96,48 @@ void generatePatterns()
         }
     }
 
-    printPatterns();
+    //printPatterns();
 
     printf("Patterncount: %zu\n", patternCount);
 }
 
+void* printProgress(void* param){
+    printf("ProgressThread created\n");
+    size_t max_iter = wordCount;
+
+    do{
+        pthread_mutex_lock(&progress_lock);
+        cout << std::string(16, '\b') << words_done << "/" << max_iter << " " <<last_word;
+        pthread_mutex_unlock(&progress_lock);
+        sched_yield();
+    }while(words_done < max_iter);
+
+    return (void*)0;
+}
+
 int main()
 {
+    double start_time = clock();
     cout << "Starting" << endl;
     readCSV();
     printf("CSV Read\n");
     generatePatterns();
     printf("Patterns generated\n");
-  // Progress Thread creation
+
+    // Progress Thread creation
+    pthread_t progress_thread;
+    pthread_create(&progress_thread, nullptr, printProgress, (void*)0);
+
+
 
   // Working Thread creation
 
   // File appending
 
+
+    void* result = 0;
+    pthread_join(progress_thread, &result);
+
+    printf("\n Took: %f Seconds\n", (double)(clock()-start_time)/CLOCKS_PER_SEC);
   return 0;
 }
