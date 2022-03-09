@@ -80,15 +80,31 @@ void printPatterns(){
     }
 }
 
+bool isSpecialPattern(Pattern pattern){
+    size_t fixedSum = 0, existingSum = 0;
+    for (int i = 0; i < 5; ++i) {
+        if((pattern.fixed >> i) & 1)
+            fixedSum++;
+        if((pattern.existing >> i) & 1)
+            existingSum++;
+    }
+    if(fixedSum == 4 && existingSum == 1){
+        return 0;
+    }
+    return 1;
+}
+
 void generatePatterns()
 {
     patterns = (Pattern*) malloc(sizeof(Pattern) * (patternCount + 1));
     for (size_t non_existing = 0; non_existing < 0b100000; ++non_existing) {
         for (size_t existing = 0; existing < 0b100000; ++existing) {
             for (size_t fixed = 0; fixed < 0b11111; ++fixed) {
+                Pattern currentPattern(fixed, existing, non_existing);
                 if (non_existing + existing + fixed == 0b11111
-                    && !(non_existing & existing & fixed)){
-                    patterns[patternCount] = Pattern(fixed, existing, non_existing);
+                    && !(non_existing & existing & fixed)
+                    && isSpecialPattern(currentPattern)){
+                    patterns[patternCount] = currentPattern;
                     patternCount++;
                     patterns = (Pattern*) realloc(patterns, sizeof(Pattern) * (patternCount + 1));
                 }
