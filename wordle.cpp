@@ -169,10 +169,14 @@ bool combinationPossible(char* word1, char* word2, Pattern pattern){
         bool char_equal = (current_char == word2[i]);
 
         if ((pattern.fixed >> (4-i)) & 1 && !char_equal)
-            return 0;
+            return false;
 
 
         size_t char_in_word = charInWord(current_char, word2);
+        if ((pattern.existing >> (4-i)) & 1 && char_in_word){
+            return false;
+        }
+
         if ((pattern.existing >>(4-i)) & 1 && (!char_in_word or char_equal)){
             return false;
         }
@@ -184,16 +188,15 @@ bool combinationPossible(char* word1, char* word2, Pattern pattern){
 
 void* generateCombinations(void* params){
     workingParameters args = *(workingParameters*)params;
-
     for (size_t i = args.start; i < args.end; ++i) {
         char* word1 = wordlist[i];
         for (int j = 0; j < patternCount; ++j) {
-            Pattern current_pattern = patterns[i];
+            Pattern current_pattern = patterns[j];
             for (int k = 0; k < wordCount; ++k) {
                 char* word2 = wordlist[k];
                 if(!wordsEqual(word1, word2) && combinationPossible(word1, word2, current_pattern)){
-                 //Append to finished list
-                 Combination current_combination(word1, word2, current_pattern);
+                    //Append to finished list
+                    Combination current_combination(word1, word2, current_pattern);
                  result_count++;
                  pthread_mutex_lock(&result_lock);
                  ofs<< current_combination.JSONify().c_str() << ","<<endl;

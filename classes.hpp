@@ -1,6 +1,9 @@
+#ifndef CLASSES_HPP_
+#define CLASSES_HPP_
 #include <string.h>
 #include <string>
 #include <stdint.h>
+
 
 class Pattern{
 public:
@@ -24,3 +27,5 @@ public:
     };
     std::string JSONify();
 };
+
+#endif
