@@ -8,6 +8,8 @@
 
 #include <fstream>
 
+#define WORKING_THREAD_COUNT 8
+
 using std::cout;
 using std::endl;
 using std::ifstream;
@@ -131,6 +133,76 @@ void* printProgress(void* param){
     return (void*)0;
 }
 
+bool wordsEqual(char* word1, char* word2){
+    for (int i = 0; i < 5; ++i) {
+        if(word1[i] != word2[i]){
+            return false;
+        }
+    }
+    return true;
+}
+
+bool charInWord(char c, char* word){
+    for (int i = 0; i < 5; ++i) {
+        if(word[i] == c) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool combinationPossible(char* word1, char* word2, Pattern pattern){
+    for (int i = 0; i < 5; ++i) {
+        char current_char = word1[i];
+        bool char_equal = (current_char == word2[i]);
+
+        if ((pattern.fixed >> (4-i)) & 1 and !char_equal)
+            return 0;
+
+        size_t char_in_word = charInWord(current_char, word2);
+        if ((pattern.existing >>(4-i)) & 1 && (!char_in_word or char_equal)){
+            return false;
+        }
+
+
+    }
+    return true;
+}
+
+void* generateCombinations(void* params){
+    workingParameters args = *(workingParameters*)params;
+    results = (Combination*) malloc (sizeof(Combination));
+    //printf("Thread %zu: Start %zu, End %zu\n", args.tid, args.start, args.end);
+
+    for (size_t i = args.start; i < args.end; ++i) {
+        char* word1 = wordlist[i];
+        for (int j = 0; j < patternCount; ++j) {
+            Pattern current_pattern = patterns[i];
+            for (int k = 0; k < wordCount; ++k) {
+                char* word2 = wordlist[k];
+                if(!wordsEqual(word1, word2) && combinationPossible(word1, word2, current_pattern)){
+                 //Append to finished list
+                 Combination current_combination(word1, word2, current_pattern);
+                 printf("%s\n", current_combination.JSONify().c_str());
+                 /*pthread_mutex_lock(&result_lock);
+
+                 result_count++;
+                 results = (Combination*) realloc(results, result_count * sizeof(Combination));
+                 results[result_count-1] = current_combination;
+                 pthread_mutex_unlock(&result_lock);*/
+                }
+            }
+        }
+        pthread_mutex_lock(&progress_lock);
+        words_done++;
+        memcpy(last_word, word1, 5);
+        pthread_mutex_unlock(&progress_lock);
+
+    }
+
+    return (void*)0;
+}
+
 int main()
 {
     double start_time = clock();
@@ -145,11 +217,27 @@ int main()
     pthread_create(&progress_thread, nullptr, printProgress, (void*)0);
 
 
+    // Working Thread creation
+    pthread_t working_threads[WORKING_THREAD_COUNT];
+    workingParameters param[WORKING_THREAD_COUNT];
+    size_t words_per_thread = wordCount / WORKING_THREAD_COUNT;
+    size_t carry = wordCount % WORKING_THREAD_COUNT;
 
-  // Working Thread creation
+    for (int i = 0; i < WORKING_THREAD_COUNT; ++i) {
+        param[i].tid = i;
+        param[i].start = i * words_per_thread;
+        param[i].end = (i + 1) * words_per_thread;
+        if (i == (WORKING_THREAD_COUNT -1) && carry){
+            param[i].end += carry;
+        }
+        pthread_create(&working_threads[i], nullptr, generateCombinations, (void*)&param[i]);
+    }
 
-  // File appending
 
+    for(int i = 0; i < WORKING_THREAD_COUNT; ++i) {
+        void* result = 0;
+        pthread_join(working_threads[i], &result);
+    }
 
     void* result = 0;
     pthread_join(progress_thread, &result);
