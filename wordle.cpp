@@ -13,7 +13,8 @@
 using std::cout;
 using std::endl;
 using std::ifstream;
-
+using std::ofstream;
+using std::ios_base;
 
 
 char** wordlist;
@@ -26,7 +27,7 @@ size_t words_done = 0;
 char last_word[5];
 pthread_mutex_t progress_lock;
 
-Combination* results;
+ofstream ofs;
 size_t result_count = 0;
 pthread_mutex_t result_lock;
 
@@ -167,8 +168,9 @@ bool combinationPossible(char* word1, char* word2, Pattern pattern){
         char current_char = word1[i];
         bool char_equal = (current_char == word2[i]);
 
-        if ((pattern.fixed >> (4-i)) & 1 and !char_equal)
+        if ((pattern.fixed >> (4-i)) & 1 && !char_equal)
             return 0;
+
 
         size_t char_in_word = charInWord(current_char, word2);
         if ((pattern.existing >>(4-i)) & 1 && (!char_in_word or char_equal)){
@@ -182,8 +184,6 @@ bool combinationPossible(char* word1, char* word2, Pattern pattern){
 
 void* generateCombinations(void* params){
     workingParameters args = *(workingParameters*)params;
-    results = (Combination*) malloc (sizeof(Combination));
-    //printf("Thread %zu: Start %zu, End %zu\n", args.tid, args.start, args.end);
 
     for (size_t i = args.start; i < args.end; ++i) {
         char* word1 = wordlist[i];
@@ -194,13 +194,10 @@ void* generateCombinations(void* params){
                 if(!wordsEqual(word1, word2) && combinationPossible(word1, word2, current_pattern)){
                  //Append to finished list
                  Combination current_combination(word1, word2, current_pattern);
-                 printf("%s\n", current_combination.JSONify().c_str());
-                 /*pthread_mutex_lock(&result_lock);
-
                  result_count++;
-                 results = (Combination*) realloc(results, result_count * sizeof(Combination));
-                 results[result_count-1] = current_combination;
-                 pthread_mutex_unlock(&result_lock);*/
+                 pthread_mutex_lock(&result_lock);
+                 ofs<< current_combination.JSONify().c_str() << ","<<endl;
+                 pthread_mutex_unlock(&result_lock);
                 }
             }
         }
@@ -217,6 +214,10 @@ void* generateCombinations(void* params){
 int main()
 {
     double start_time = clock();
+    ofs.open("combinations.json", ios_base::out|ios_base::app);
+    assert(ofs.is_open());
+    ofs << "[";
+
     cout << "Starting" << endl;
     readCSV();
     printf("CSV Read\n");
@@ -253,6 +254,7 @@ int main()
     void* result = 0;
     pthread_join(progress_thread, &result);
 
+    ofs.close();
     printf("\n Took: %f Seconds\n", (double)(clock()-start_time)/CLOCKS_PER_SEC);
   return 0;
 }
