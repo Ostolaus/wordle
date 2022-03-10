@@ -5,6 +5,8 @@
 #include <string.h>
 #include <assert.h>
 #include <unistd.h>
+#include <map>
+
 
 #include <fstream>
 
@@ -15,6 +17,7 @@ using std::endl;
 using std::ifstream;
 using std::ofstream;
 using std::ios_base;
+using std::map;
 
 
 char** wordlist;
@@ -163,22 +166,46 @@ bool charInWord(char c, char* word){
     return false;
 }
 
-bool combinationPossible(char* word1, char* word2, Pattern pattern){
+bool combinationPossible(char *word1, char *word2, Pattern pattern, const std::map<char, int> w1_existing_map) {
     for (int i = 0; i < 5; ++i) {
         char current_char = word1[i];
         bool char_equal = (current_char == word2[i]);
 
-        if ((pattern.fixed >> (4-i)) & 1 && !char_equal)
+        if (((pattern.fixed >> (4 - i)) & 1) && !char_equal)
+            return false;
+
+        if (!((pattern.fixed >> (4 - i)) & 1) && char_equal)
+            return false;
+
+        size_t char_in_word = charInWord(current_char, word2);
+        if (((pattern.non_existing >> (4 - i)) & 1) && char_in_word)
             return false;
 
 
-        size_t char_in_word = charInWord(current_char, word2);
-        if ((pattern.existing >> (4-i)) & 1 && char_in_word){
+        //Avoid double char mistake ex AACHS -> SNACK
+        if (((pattern.existing >> (4 - i)) & 1) && (!char_in_word || char_equal)) {
             return false;
         }
 
-        if ((pattern.existing >>(4-i)) & 1 && (!char_in_word or char_equal)){
+        if (!((pattern.existing >> (4 - i)) & 1) && char_in_word) {
             return false;
+        }
+        //-----------------------------------------------
+
+
+
+        std::map<char, int> w2_dict;
+        for (int word_idx = 0; word_idx < 5; ++word_idx) {
+            char c2 = word2[word_idx];
+
+            if (w2_dict.contains(c2)) {
+                w2_dict[c2]++;
+            } else {
+                w2_dict.insert(std::pair<char, int>(c2, 1));
+            }
+        }
+        if (((pattern.existing >> (4 - i)) & 1) && w1_existing_map.find(word1[i])->second != w2_dict.find(word1[i])->second){
+         return false;
         }
 
 
@@ -192,15 +219,27 @@ void* generateCombinations(void* params){
         char* word1 = wordlist[i];
         for (int j = 0; j < patternCount; ++j) {
             Pattern current_pattern = patterns[j];
+
+            std::map<char, int> w1_dict;
+            for (int l = 0; l < 5; ++l) {
+                char c1 = word1[l];
+                bool char_contained = w1_dict.contains(c1);
+                if(char_contained && (current_pattern.existing >> (4-l)) &1) {
+                    w1_dict[c1] ++;
+                }else if(!char_contained && (current_pattern.existing >> (4-l)) &1){
+                    w1_dict.insert(std::pair<char, int>(c1, 1));
+                }
+            }
+
             for (int k = 0; k < wordCount; ++k) {
                 char* word2 = wordlist[k];
-                if(!wordsEqual(word1, word2) && combinationPossible(word1, word2, current_pattern)){
-                    //Append to finished list
-                    Combination current_combination(word1, word2, current_pattern);
-                 result_count++;
-                 pthread_mutex_lock(&result_lock);
-                 ofs<< current_combination.JSONify().c_str() << ","<<endl;
-                 pthread_mutex_unlock(&result_lock);
+                if(!wordsEqual(word1, word2) && combinationPossible(word1, word2, current_pattern, w1_dict)){
+                     //Append to finished list
+                     Combination current_combination(word1, word2, current_pattern);
+                     result_count++;
+                     pthread_mutex_lock(&result_lock);
+                     ofs<< current_combination.JSONify().c_str() << ","<<endl;
+                     pthread_mutex_unlock(&result_lock);
                 }
             }
         }
