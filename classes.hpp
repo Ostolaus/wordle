@@ -28,4 +28,17 @@ public:
     std::string JSONify();
 };
 
+class Word{
+public:
+    char word[5];
+    size_t count;
+
+    Word(char* in_word){
+        memcpy(word, in_word, 5);
+        count = 0;
+    }
+
+    std::string JSONify();
+};
+
 #endif

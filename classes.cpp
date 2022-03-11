@@ -22,3 +22,9 @@ std::string Combination::JSONify() {
     std::string return_string = "{ \"word1\" :\"" + w1 + "\", \"word2\" :\"" + w2 + "\", \"Pattern\" :" + pattern.JSONify() + "}";
     return return_string;
 }
+
+std::string Word::JSONify() {
+    std::string w1(word,5);
+    std::string return_string = "{ \"word\" :\"" + w1 + "\", \"count\" :" + std::to_string(count) + "}";
+    return return_string;
+}
