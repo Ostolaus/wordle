@@ -34,6 +34,10 @@ ofstream ofs;
 size_t result_count = 0;
 pthread_mutex_t result_lock;
 
+enum Modes{COUNT, COMBS};
+Modes mode = COMBS;
+
+
 
 typedef struct workingParameters{
     size_t tid;
@@ -44,7 +48,7 @@ typedef struct workingParameters{
 void readCSV() {
     wordlist = (char**) malloc((wordCount+1)*sizeof(char *));
     ifstream indata;
-    indata.open("../wordle.csv");
+    indata.open("../words.csv");
 
     if(!indata.is_open()){
         cout << "Opening File failed\n";
@@ -140,9 +144,9 @@ void* printProgress(void* param){
 
     do{
         pthread_mutex_lock(&progress_lock);
-        cout << std::string(16, '\b') << words_done << "/" << max_iter << " " <<last_word;
+        cout  << words_done << "/" << max_iter << " " <<last_word << endl << "\x1b[A";
         pthread_mutex_unlock(&progress_lock);
-        sched_yield();
+        sleep(2);
     }while(words_done < max_iter);
 
     return (void*)0;
@@ -166,50 +170,67 @@ bool charInWord(char c, char* word){
     return false;
 }
 
-bool combinationPossible(char *word1, char *word2, Pattern pattern, const std::map<char, int> w1_existing_map) {
+bool combinationPossible(char *word1, char *word2, Pattern pattern) {
     for (int i = 0; i < 5; ++i) {
         char current_char = word1[i];
+        bool fix = ((pattern.fixed >> (4 - i)) & 1);
+        bool existing = ((pattern.existing >> (4 - i)) & 1);
+        bool non_existing = ((pattern.non_existing >> (4 - i)) & 1);
         bool char_equal = (current_char == word2[i]);
 
-        if (((pattern.fixed >> (4 - i)) & 1) && !char_equal)
+        //Check for fixed position
+        if (fix && !char_equal)
             return false;
 
-        if (!((pattern.fixed >> (4 - i)) & 1) && char_equal)
+        if (!fix && char_equal)
             return false;
 
+        //Check for non existing positions
         size_t char_in_word = charInWord(current_char, word2);
-        if (((pattern.non_existing >> (4 - i)) & 1) && char_in_word)
+        if (non_existing && char_in_word)
             return false;
 
 
-        //Avoid double char mistake ex AACHS -> SNACK
-        if (((pattern.existing >> (4 - i)) & 1) && (!char_in_word || char_equal)) {
+        //Basic existing check
+        if (existing && (!char_in_word || char_equal)) {
             return false;
         }
-
-        if (!((pattern.existing >> (4 - i)) & 1) && char_in_word) {
-            return false;
-        }
-        //-----------------------------------------------
-
-
-
-        std::map<char, int> w2_dict;
-        for (int word_idx = 0; word_idx < 5; ++word_idx) {
-            char c2 = word2[word_idx];
-
-            if (w2_dict.contains(c2)) {
-                w2_dict[c2]++;
-            } else {
-                w2_dict.insert(std::pair<char, int>(c2, 1));
-            }
-        }
-        if (((pattern.existing >> (4 - i)) & 1) && w1_existing_map.find(word1[i])->second != w2_dict.find(word1[i])->second){
-         return false;
-        }
-
-
     }
+
+    //Removing double existing chars
+    std::map<char, int> w1_fixed_existing_dict;
+    std::map<char, int> w2_total_dict;
+    for (int word_idx = 0; word_idx < 5; ++word_idx) {
+        char c1 = word1[word_idx];
+        char c2 = word2[word_idx];
+        bool fix = ((pattern.fixed >> (4 - word_idx)) & 1);
+        bool existing = ((pattern.existing >> (4 - word_idx)) & 1);
+
+        bool char_contained = w1_fixed_existing_dict.contains(c1);
+        if(char_contained && (existing || fix)) {
+            w1_fixed_existing_dict[c1] ++;
+        }else if(!char_contained && (existing || fix)){
+            w1_fixed_existing_dict.insert(std::pair<char, int>(c1, 1));
+        }
+
+
+        if (w2_total_dict.contains(c2)) {
+            w2_total_dict[c2]++;
+        } else {
+            w2_total_dict.insert(std::pair<char, int>(c2, 1));
+        }
+    }
+
+
+
+    for (int i = 0; i < 5; ++i){
+        auto w1_count = w1_fixed_existing_dict.find(word1[i]);
+        auto w2_count = w2_total_dict.find(word1[i]);
+        if(w1_count->second != w2_count->second){
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -217,33 +238,38 @@ void* generateCombinations(void* params){
     workingParameters args = *(workingParameters*)params;
     for (size_t i = args.start; i < args.end; ++i) {
         char* word1 = wordlist[i];
+        Word current_word(word1);
         for (int j = 0; j < patternCount; ++j) {
             Pattern current_pattern = patterns[j];
-
-            std::map<char, int> w1_dict;
-            for (int l = 0; l < 5; ++l) {
-                char c1 = word1[l];
-                bool char_contained = w1_dict.contains(c1);
-                if(char_contained && (current_pattern.existing >> (4-l)) &1) {
-                    w1_dict[c1] ++;
-                }else if(!char_contained && (current_pattern.existing >> (4-l)) &1){
-                    w1_dict.insert(std::pair<char, int>(c1, 1));
-                }
-            }
-
             for (int k = 0; k < wordCount; ++k) {
                 char* word2 = wordlist[k];
-                if(!wordsEqual(word1, word2) && combinationPossible(word1, word2, current_pattern, w1_dict)){
-                     //Append to finished list
-                     Combination current_combination(word1, word2, current_pattern);
-                     result_count++;
-                     pthread_mutex_lock(&result_lock);
-                     ofs<< current_combination.JSONify().c_str() << ","<<endl;
-                     pthread_mutex_unlock(&result_lock);
+                if(!wordsEqual(word1, word2) && combinationPossible(word1, word2, current_pattern)){
+                    if(mode == COUNT){
+                        current_word.count++;
+                    }
+
+                    if(mode == COMBS){
+                        //Append to finished list
+                        Combination current_combination(word1, word2, current_pattern);
+                        pthread_mutex_lock(&result_lock);
+                        result_count++;
+                        ofs<< current_combination.JSONify().c_str() << ","<<endl;
+                        pthread_mutex_unlock(&result_lock);
+                    }
                 }
             }
+
         }
+
         pthread_mutex_lock(&progress_lock);
+
+        if(mode == COUNT){
+            pthread_mutex_lock(&result_lock);
+            result_count++;
+            ofs<< current_word.JSONify().c_str() << ","<<endl;
+            pthread_mutex_unlock(&result_lock);
+        }
+
         words_done++;
         memcpy(last_word, word1, 5);
         pthread_mutex_unlock(&progress_lock);
@@ -255,8 +281,12 @@ void* generateCombinations(void* params){
 
 int main()
 {
-    double start_time = clock();
-    ofs.open("combinations.json", ios_base::out|ios_base::app);
+    if(mode == COUNT){
+        ofs.open("count.json", ios_base::out|ios_base::app);
+    }else if(mode == COMBS){
+        ofs.open("combs.json", ios_base::out|ios_base::app);
+    }
+
     assert(ofs.is_open());
     ofs << "[";
 
@@ -296,7 +326,7 @@ int main()
     void* result = 0;
     pthread_join(progress_thread, &result);
 
+    ofs << "\b]";
     ofs.close();
-    printf("\n Took: %f Seconds\n", (double)(clock()-start_time)/CLOCKS_PER_SEC);
   return 0;
 }
