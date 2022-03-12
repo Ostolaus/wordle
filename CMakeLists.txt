@@ -10,7 +10,7 @@ include_directories(.)
 
 add_executable(wordle
         classes.hpp
-        wordle.cpp classes.cpp)
+        wordle_prep.cpp classes.cpp)
 
 find_package (Threads)
 target_link_libraries (wordle ${CMAKE_THREAD_LIBS_INIT})

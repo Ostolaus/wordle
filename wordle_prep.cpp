@@ -253,7 +253,10 @@ void* generateCombinations(void* params){
                         Combination current_combination(word1, word2, current_pattern);
                         pthread_mutex_lock(&result_lock);
                         result_count++;
-                        ofs<< current_combination.JSONify().c_str() << ","<<endl;
+
+                        ofs << current_combination.JSONify().c_str() << "," << endl;
+
+
                         pthread_mutex_unlock(&result_lock);
                     }
                 }
@@ -266,7 +269,12 @@ void* generateCombinations(void* params){
         if(mode == COUNT){
             pthread_mutex_lock(&result_lock);
             result_count++;
-            ofs<< current_word.JSONify().c_str() << ","<<endl;
+            if(result_count == wordCount - 1){
+                ofs<< current_word.JSONify().c_str() << endl;
+            }else{
+                ofs<< current_word.JSONify().c_str() << ","<< endl;
+            }
+            ofs<< current_word.JSONify().c_str() << ","<< endl;
             pthread_mutex_unlock(&result_lock);
         }
 
@@ -325,8 +333,12 @@ int main()
 
     void* result = 0;
     pthread_join(progress_thread, &result);
+    cout  << words_done << "/" << wordCount << " " <<last_word << endl;
 
-    ofs << "\b]";
+
+
+    ofs << "]";
     ofs.close();
+    printf("\nFinished You Did It\n");
   return 0;
 }
